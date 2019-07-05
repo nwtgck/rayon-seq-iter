@@ -10,21 +10,21 @@ struct ReverseTuple< T>(usize, T);
 impl< T> PartialEq for ReverseTuple< T> {
     fn eq(&self, o: &Self) -> bool { o.0.eq(&self.0) }
 }
-impl< T> Eq for ReverseTuple< T> {}
-impl< T> PartialOrd for ReverseTuple< T> {
+impl<T> Eq for ReverseTuple<T> {}
+impl<T> PartialOrd for ReverseTuple<T> {
     fn partial_cmp(&self, o: &Self) -> Option<Ordering> { o.0.partial_cmp(&self.0) }
 }
-impl< T> Ord for ReverseTuple< T> {
+impl<T> Ord for ReverseTuple<T> {
     fn cmp(&self, o: &Self) -> Ordering { o.0.cmp(&self.0) }
 }
 
-pub struct IntoSeqIter<I: Sync + Send> {
+pub struct IntoSeqIter<I> {
     iter: mpsc::IntoIter<ReverseTuple<I>>,
     idx: usize,
     heap: BinaryHeap<ReverseTuple<I>>
 }
 
-impl <I: Sync + Send>  Iterator for IntoSeqIter<I> {
+impl<I>  Iterator for IntoSeqIter<I> {
     type Item = I;
     fn next(&mut self) -> Option<Self::Item> {
         let x: Option<Self::Item> = if let Some(reverse_tuple) = self.iter.next() {
@@ -46,7 +46,7 @@ impl <I: Sync + Send>  Iterator for IntoSeqIter<I> {
     }
 }
 
-pub fn into_seq_iter<I: Sync + Send + 'static, P: rayon::iter::IndexedParallelIterator<Item=I> + Sync + 'static>(par_iter: P) -> IntoSeqIter<I> {
+pub fn into_seq_iter<I: Send + 'static, P: rayon::iter::IndexedParallelIterator<Item=I> + 'static>(par_iter: P) -> IntoSeqIter<I> {
     // TODO: 1 is OK?
     let (sender, receiver) = mpsc::sync_channel(1);
 
