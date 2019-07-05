@@ -2,7 +2,6 @@ use rayon::prelude::*;
 use std::collections::BinaryHeap;
 use std::cmp::Ordering;
 use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
 
 
 // (base: https://users.rust-lang.org/t/parallel-work-collected-sequentially/13504/3)
@@ -20,47 +19,47 @@ impl< T> Ord for ReverseTuple< T> {
 }
 
 pub struct IntoSeqIter<I: Sync + Send> {
-    iter: mpsc::IntoIter<I>
+    iter: mpsc::IntoIter<ReverseTuple<I>>,
+    idx: usize,
+    heap: BinaryHeap<ReverseTuple<I>>
 }
 
 impl <I: Sync + Send>  Iterator for IntoSeqIter<I> {
     type Item = I;
     fn next(&mut self) -> Option<Self::Item> {
-        self.iter.next()
+        let x: Option<Self::Item> = if let Some(reverse_tuple) = self.iter.next() {
+            // Push to new element
+            self.heap.push(reverse_tuple);
+            // Get the youngest element
+            if self.heap.peek().map(|x| x.0) == Some(self.idx) {
+                self.heap.pop().map(|x| x.1)
+            } else {
+                self.next()
+            }
+        } else {
+            self.heap.pop().map(|x| x.1)
+        };
+
+        self.idx += 1;
+
+        x
     }
 }
 
 pub fn into_seq_iter<I: Sync + Send + 'static, P: rayon::iter::IndexedParallelIterator<Item=I> + Sync + 'static>(par_iter: P) -> IntoSeqIter<I> {
     // TODO: 1 is OK?
     let (sender, receiver) = mpsc::sync_channel(1);
-    let heap = Arc::new(Mutex::new(BinaryHeap::new()));
-    let idx = Arc::new(Mutex::new(0));
 
-    let heap_clone = Arc::clone(&heap);
-    let index_clone = Arc::clone(&idx);
     rayon::spawn( move || {
         par_iter.enumerate().for_each(|(i, x)| {
-            let mut heap_guard = heap_clone.lock().unwrap();
-            let mut idx_guard = index_clone.lock().unwrap();
-            heap_guard.push(ReverseTuple(i, x));
-            loop {
-                if let Some(i) = heap_guard.peek().map(|r| r.0) {
-                    if i == *idx_guard {
-                        let x = heap_guard.pop().unwrap().1;
-                        sender.send(x).unwrap();
-                        *idx_guard += 1;
-                    } else {
-                        break
-                    }
-                } else {
-                    break;
-                }
-            }
+            sender.send(ReverseTuple(i, x)).unwrap();
         });
     });
 
     IntoSeqIter {
-        iter: receiver.into_iter()
+        iter: receiver.into_iter(),
+        idx: 0,
+        heap: BinaryHeap::new()
     }
 }
 
