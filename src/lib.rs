@@ -24,7 +24,7 @@ pub struct IntoSeqIter<I> {
     heap: BinaryHeap<ReverseTuple<I>>
 }
 
-impl<I>  Iterator for IntoSeqIter<I> {
+impl<I> Iterator for IntoSeqIter<I> {
     type Item = I;
     fn next(&mut self) -> Option<Self::Item> {
         loop {
@@ -45,21 +45,25 @@ impl<I>  Iterator for IntoSeqIter<I> {
     }
 }
 
-pub fn into_seq_iter<I: Send + 'static, P: rayon::iter::IndexedParallelIterator<Item=I> + 'static>(par_iter: P, bound: usize) -> IntoSeqIter<I> {
-    let (sender, receiver) = mpsc::sync_channel(bound);
+pub trait IntoSeqIterator: rayon::iter::IndexedParallelIterator + 'static {
+    fn into_seq_iter(self, bound: usize) -> IntoSeqIter<Self::Item> {
+        let (sender, receiver) = mpsc::sync_channel(bound);
 
-    rayon::spawn( move || {
-        par_iter.enumerate().for_each(|(i, x)| {
-            sender.send(ReverseTuple(i, x)).unwrap();
+        rayon::spawn( move || {
+            self.enumerate().for_each(|(i, x)| {
+                sender.send(ReverseTuple(i, x)).unwrap();
+            });
         });
-    });
 
-    IntoSeqIter {
-        iter: receiver.into_iter(),
-        idx: 0,
-        heap: BinaryHeap::new()
+        IntoSeqIter {
+            iter: receiver.into_iter(),
+            idx: 0,
+            heap: BinaryHeap::new()
+        }
     }
 }
+
+impl<P: rayon::iter::IndexedParallelIterator + 'static> IntoSeqIterator for P {}
 
 #[cfg(test)]
 mod tests {
@@ -68,8 +72,11 @@ mod tests {
 
     #[test]
     fn it_should_be_sequential() {
+        // Par iter
         let par_iter = (10..20).collect::<Vec<i32>>().into_par_iter().map(|x| x * 2);
-        let vec: Vec<_> = into_seq_iter(par_iter, num_cpus::get()).collect();
-        assert_eq!(vec, vec![20, 22, 24, 26, 28, 30, 32, 34, 36, 38]);
+        // Convert to iter
+        let iter = par_iter.into_seq_iter(num_cpus::get());
+        // Collect and assert
+        assert_eq!(iter.collect::<Vec<i32>>(), vec![20, 22, 24, 26, 28, 30, 32, 34, 36, 38]);
     }
 }
