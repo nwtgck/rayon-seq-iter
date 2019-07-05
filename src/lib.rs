@@ -27,22 +27,21 @@ pub struct IntoSeqIter<I> {
 impl<I>  Iterator for IntoSeqIter<I> {
     type Item = I;
     fn next(&mut self) -> Option<Self::Item> {
-        let x: Option<Self::Item> = if let Some(reverse_tuple) = self.iter.next() {
-            // Push to new element
-            self.heap.push(reverse_tuple);
-            // Get the youngest element
-            if self.heap.peek().map(|x| x.0) == Some(self.idx) {
-                self.heap.pop().map(|x| x.1)
+        loop {
+            // NOTE: self.iter.nex() blocks because it is Receiver's iter()
+            if let Some(reverse_tuple) = self.iter.next() {
+                // Push to new element
+                self.heap.push(reverse_tuple);
+                // Get the youngest element
+                if self.heap.peek().map(|x| x.0) == Some(self.idx) {
+                    self.idx += 1;
+                    break self.heap.pop().map(|x| x.1);
+                }
             } else {
-                self.next()
+                self.idx += 1;
+                break self.heap.pop().map(|x| x.1);
             }
-        } else {
-            self.heap.pop().map(|x| x.1)
-        };
-
-        self.idx += 1;
-
-        x
+        }
     }
 }
 
