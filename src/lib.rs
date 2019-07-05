@@ -73,7 +73,7 @@ mod tests {
     #[test]
     fn it_should_be_sequential() {
         // Par iter
-        let par_iter = (10..20).collect::<Vec<i32>>().into_par_iter().map(|x| x * 2);
+        let par_iter = (10..20).into_par_iter().map(|x| x * 2);
         // Convert to iter
         let iter = par_iter.into_seq_iter(num_cpus::get());
         // Collect and assert
