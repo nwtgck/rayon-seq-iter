@@ -1,0 +1,29 @@
+# (base: https://gist.github.com/zargony/de209b1a790c3cb2176c86405a51b33c)
+
+version: 2
+
+jobs:
+  build:
+    docker:
+      - image: circleci/rust:1
+    steps:
+      - checkout
+      - run:
+          name: Version information
+          command: |
+            rustc --version
+            cargo --version
+            rustup --version
+      - run:
+          name: Build
+          command: cargo build
+      - run:
+          name: Test
+          command: cargo test
+      - save_cache:
+          paths:
+            - /usr/local/cargo/registry
+            - target/debug/.fingerprint
+            - target/debug/build
+            - target/debug/deps
+          key: v4-cargo-cache-{{ arch }}-{{ checksum "Cargo.lock" }}
