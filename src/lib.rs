@@ -45,9 +45,8 @@ impl<I>  Iterator for IntoSeqIter<I> {
     }
 }
 
-pub fn into_seq_iter<I: Send + 'static, P: rayon::iter::IndexedParallelIterator<Item=I> + 'static>(par_iter: P) -> IntoSeqIter<I> {
-    // TODO: 1 is OK?
-    let (sender, receiver) = mpsc::sync_channel(1);
+pub fn into_seq_iter<I: Send + 'static, P: rayon::iter::IndexedParallelIterator<Item=I> + 'static>(par_iter: P, bound: usize) -> IntoSeqIter<I> {
+    let (sender, receiver) = mpsc::sync_channel(bound);
 
     rayon::spawn( move || {
         par_iter.enumerate().for_each(|(i, x)| {
@@ -65,11 +64,12 @@ pub fn into_seq_iter<I: Send + 'static, P: rayon::iter::IndexedParallelIterator<
 #[cfg(test)]
 mod tests {
     use super::*;
+    use num_cpus;
 
     #[test]
     fn it_should_be_sequential() {
         let par_iter = (10..20).collect::<Vec<i32>>().into_par_iter().map(|x| x * 2);
-        let vec: Vec<_> = into_seq_iter(par_iter).collect();
+        let vec: Vec<_> = into_seq_iter(par_iter, num_cpus::get()).collect();
         assert_eq!(vec, vec![20, 22, 24, 26, 28, 30, 32, 34, 36, 38]);
     }
 }
